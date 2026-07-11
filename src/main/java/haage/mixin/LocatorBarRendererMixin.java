@@ -4,7 +4,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import haage.LocatorHeads;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.contextualbar.LocatorBarRenderer;
+import net.minecraft.client.gui.contextualbar.LocatorBar;
 import net.minecraft.client.resources.WaypointStyle;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
@@ -23,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(LocatorBarRenderer.class)
+@Mixin(LocatorBar.class)
 public class LocatorBarRendererMixin {
     @Shadow @Final private Minecraft minecraft;
     @Unique private Identifier locatorHeads$skinOverride;
@@ -39,6 +39,13 @@ public class LocatorBarRendererMixin {
     private void locatorHeads$captureWaypointForSkinRender(Entity entity, Level level, PartialTickSupplier partialTickSupplier, GuiGraphicsExtractor guiGraphics, int i, TrackedWaypoint trackedWaypoint, CallbackInfo ci) {
         if (LocatorHeads.CONFIG == null || !LocatorHeads.CONFIG.enableMod) {
             this.locatorHeads$shouldHideWaypoint = false;
+            return;
+        }
+        if (level == null || entity == null || this.minecraft.level == null || this.minecraft.getCameraEntity() == null) {
+            this.locatorHeads$skinOverride = null;
+            this.locatorHeads$currentWaypoint = null;
+            this.locatorHeads$playerName = null;
+            this.locatorHeads$shouldHideWaypoint = true;
             return;
         }
         this.locatorHeads$currentWaypoint = trackedWaypoint;
@@ -69,8 +76,8 @@ public class LocatorBarRendererMixin {
 
                 if (level != null) {
                     PlayerTeam team = level.getScoreboard().getPlayersTeam(playerInfo.getProfile().name());
-                    if (team != null && team.getColor().getColor() != null) {
-                        this.locatorHeads$teamColor = team.getColor().getColor();
+                    if (team != null && team.getColor().isPresent()) {
+                        this.locatorHeads$teamColor = team.getColor().get().rgb();
                     }
                 }
             }
@@ -90,11 +97,11 @@ public class LocatorBarRendererMixin {
 
     @Unique
     private void locatorHeads$renderPlayerHead(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height) {
-        if (LocatorHeads.CONFIG == null || LocatorHeads.CONFIG.teamBorderThickness == null) return;
+        if (LocatorHeads.CONFIG == null || LocatorHeads.CONFIG.teamBorderThickness == null || this.minecraft.level == null || this.minecraft.getCameraEntity() == null) return;
 
         float distance = Mth.sqrt((float)this.locatorHeads$currentWaypoint.distanceSquared(this.minecraft.getCameraEntity()));
         Waypoint.Icon icon = this.locatorHeads$currentWaypoint.icon();
-        WaypointStyle style = this.minecraft.getWaypointStyles().get(icon.style);
+        WaypointStyle style = this.minecraft.gui.hud.getWaypointStyles().get(icon.style);
         float progress = 1 - Mth.clamp((distance - style.nearDistance()) / (style.farDistance() - style.nearDistance()), 0, 1);
         int scaledWidth = Mth.lerpInt(progress, 4 * 100 + 100, width * 100);
         int scaledHeight = Mth.lerpInt(progress, 4 * 100 + 100, height * 100);
